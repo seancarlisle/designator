@@ -21,6 +21,13 @@ class Designator(object):
     def subnet_lookup(self):
         self.subnets = dict()
         for network in self.cloud.list_networks():
+            if 'dns_domain' not in network:
+                LOG.error(
+                    'The "dns_domain" key was not found in the network '
+                    'object. Please ensure that the extention_driver "dns" is '
+                    'enabled in ml2_conf.ini for the ml2 plugin.'
+                )
+                break
             if network['dns_domain']:
                 for subnet in network['subnets']:
                     self.subnets[subnet] = network['dns_domain']
@@ -28,6 +35,13 @@ class Designator(object):
     def port_lookup(self):
         self.ports = dict()
         for port in self.cloud.list_ports():
+            if 'dns_name' not in port:
+                LOG.error(
+                    'The "dns_name" key was not found in the port object. '
+                    'Please ensure that the extention_driver "dns" is enabled '
+                    'in ml2_conf.ini for the ml2 plugin.'
+                )
+                break
             if port['dns_name']:
                 for ip in port['fixed_ips']:
                     dns_domain = self.subnets.get(ip['subnet_id'])
