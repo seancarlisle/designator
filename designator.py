@@ -110,7 +110,7 @@ def split_reverse_join(f, delim='.'):
 
 
 def main():
-    d = Designator('sam')
+    d = Designator('default')
     d.subnet_lookup()
     d.port_lookup()
     d.recordsets_lookup()
