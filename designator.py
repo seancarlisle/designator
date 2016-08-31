@@ -85,18 +85,17 @@ class Designator(object):
         return ret
 
     def record_create(self, ip, name, domain):
-        self.cloud.create_recordset(domain, name, 'A', [ip])
         fqdn = convert_to_fqdn(name, domain)
         fqdn_ptr = convert_to_fqdn(split_reverse_join(ip), 'in-addr.arpa.')
         self.cloud.create_recordset(fqdn_ptr.split('.', 1)[1],
                                     fqdn_ptr, 'PTR', [fqdn])
+        self.cloud.create_recordset(domain, name, 'A', [ip])
 
     def record_delete(self, ip, name, domain):
         fqdn = convert_to_fqdn(name, domain)
-        self.cloud.delete_recordset(domain, fqdn)
         fqdn_ptr = convert_to_fqdn(split_reverse_join(ip), 'in-addr.arpa.')
         self.cloud.delete_recordset(fqdn_ptr.split('.', 1)[1], fqdn_ptr)
-
+        self.cloud.delete_recordset(domain, fqdn)
 
 
 def convert_to_fqdn(name, domain):
@@ -119,15 +118,23 @@ def main():
         if d.recordsets.get(ip):
             LOG.debug('already added')
             continue
-        LOG.info('adding {}'.format(ip))
-        d.record_create(ip, **dnsinfo)
+        try:
+            LOG.info('adding {}'.format(ip))
+            d.record_create(ip, **dnsinfo)
+        except OpenStackCloudException as e:
+            LOG.warn(repr(e))
+            pass
 
     for ip, dnsinfo in d.recordsets.items():
         if d.ports.get(ip):
             LOG.debug('exists {}'.format(ip))
             continue
-        LOG.info('deleting {}'.format(ip))
-        d.record_delete(ip, **dnsinfo)
+        try:
+            LOG.info('deleting {}'.format(ip))
+            d.record_delete(ip, **dnsinfo)
+        except OpenStackCloudException as e:
+            LOG.warn(repr(e))
+            pass
 
 if __name__ == '__main__':
     main()
