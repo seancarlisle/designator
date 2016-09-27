@@ -59,6 +59,7 @@ class Designator(object):
                 }
 
     def recordsets_lookup(self):
+        self.zones = dict()
         self.recordsets = dict()
         for ip, dnsinfo in self.ports.items():
             if self.recordsets.get(dnsinfo['domain']):
@@ -74,7 +75,9 @@ class Designator(object):
 
     def crunch_recordsets(self, dns_domain):
         ret = dict()
-        for record in self.cloud.list_recordsets(dns_domain):
+        if not self.zones.get(dns_domain):
+            self.zones[dns_domain] = self.cloud.list_recordsets(dns_domain)
+        for record in self.zones[dns_domain]:
             if record['type'] != 'A':
                 continue
             dns_name, dns_domain = record['name'].split('.', 1)
@@ -87,15 +90,31 @@ class Designator(object):
     def record_create(self, ip, name, domain):
         fqdn = convert_to_fqdn(name, domain)
         fqdn_ptr = convert_to_fqdn(split_reverse_join(ip), 'in-addr.arpa.')
-        self.cloud.create_recordset(fqdn_ptr.split('.', 1)[1],
-                                    fqdn_ptr, 'PTR', [fqdn])
-        self.cloud.create_recordset(domain, name, 'A', [ip])
+        try:
+            self.cloud.create_recordset(fqdn_ptr.split('.', 1)[1],
+                                        fqdn_ptr, 'PTR', [fqdn])
+        except OpenStackCloudException as e:
+            LOG.warn(repr(e))
+            pass
+        try:
+            self.cloud.create_recordset(domain, name, 'A', [ip])
+        except OpenStackCloudException as e:
+            LOG.warn(repr(e))
+            pass
 
     def record_delete(self, ip, name, domain):
         fqdn = convert_to_fqdn(name, domain)
         fqdn_ptr = convert_to_fqdn(split_reverse_join(ip), 'in-addr.arpa.')
-        self.cloud.delete_recordset(fqdn_ptr.split('.', 1)[1], fqdn_ptr)
-        self.cloud.delete_recordset(domain, fqdn)
+        try:
+            self.cloud.delete_recordset(fqdn_ptr.split('.', 1)[1], fqdn_ptr)
+        except OpenStackCloudException as e:
+            LOG.warn(repr(e))
+            pass
+        try:
+            self.cloud.delete_recordset(domain, fqdn)
+        except OpenStackCloudException as e:
+            LOG.warn(repr(e))
+            pass
 
 
 def convert_to_fqdn(name, domain):
