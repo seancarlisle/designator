@@ -1,0 +1,17 @@
+clouds:
+  default:
+    auth:
+      auth_url: http://authip:5000/v3
+      project_name: admin
+      tenant_name: admin
+      username: admin
+      password: Passw0rd123
+      user_domain_name: Default
+      project_domain_name: Default
+    region_name: RegionOne
+    interface: internal
+cache:
+  max_age: 180
+  class: dogpile.cache.dbm
+  arguments:
+    filename: /root/.cache/openstack/shade.dbm
