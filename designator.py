@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-import queue
 import sys
-import threading
 
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -16,31 +14,9 @@ logging.register_options(CONF)
 logging.setup(CONF, "")
 
 
-class Worker(threading.thread):
-    def __init__(self, cloud, queue):
-        super(Worker, self).__init__()
-        self.cloud = cloud
-        self.queue = queue
-
-    def run(self):
-        while True:
-            try:
-                request = self.queue.get()
-                request['ret'] = request['func'](**request['kwargs'])
-            finally:
-                self.queue.task_done()
-
-
 class Designator(object):
-    def __init__(self, cloud_name, threads=8):
+    def __init__(self, cloud_name):
         self.cloud = shade.openstack_cloud(cloud=cloud_name)
-        self.queue = six.moves.queue.Queue()
-
-        # NOTE(SamYaple): start worker threads
-        for x in range(threads if threads > 0 else 1):
-            worker = Worker(self.cloud, self.queue)
-            worker.setDaemon(True)
-            worker.start()
 
     def subnet_lookup(self):
         self.subnets = dict()
