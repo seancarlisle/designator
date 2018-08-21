@@ -34,7 +34,8 @@ class Designator(object):
 
     def port_lookup(self):
         self.ports = dict()
-        for port in self.cloud.list_ports():
+        sports = self.cloud.list_ports()
+        for port in sports:
             if 'dns_name' not in port:
                 LOG.error(
                     'The "dns_name" key was not found in the port object. '
@@ -61,29 +62,38 @@ class Designator(object):
     def recordsets_lookup(self):
         self.zones = dict()
         self.recordsets = dict()
+        original_domains = set()
         for ip, dnsinfo in self.ports.items():
-            if self.recordsets.get(dnsinfo['domain']):
+            original_domains.add(dnsinfo['domain'])
+
+        for domain in original_domains:
+            if self.recordsets.get(domain):
                 LOG.debug(
-                    'Already fetched info for "{}"'.format(dnsinfo['domain']))
+                    'Already fetched info for "{}"'.format(domain))
                 continue
             try:
                 self.recordsets.update(
-                    self.crunch_recordsets(dnsinfo['domain']))
+                    self.crunch_recordsets(domain))
             except OpenStackCloudException:
-                LOG.error('Zone "{}" does not exist'.format(dnsinfo['name']))
+                LOG.error('Zone "{}" does not exist'.format(domain))
                 pass
 
     def crunch_recordsets(self, dns_domain):
         ret = dict()
+
         if not self.zones.get(dns_domain):
             self.zones[dns_domain] = self.cloud.list_recordsets(dns_domain)
+            i = 0
         for record in self.zones[dns_domain]:
+            i = i + 1
             if record['type'] != 'A':
                 continue
             dns_name, dns_domain = record['name'].split('.', 1)
-            ret[record['records'][0]] = {
+            # ret[record['records'][0]] = {
+            ret[i] = {
                 'domain': dns_domain,
                 'name': dns_name,
+                'ip': record['records'][0]
             }
         return ret
 
@@ -134,26 +144,39 @@ def main():
     d.recordsets_lookup()
 
     for ip, dnsinfo in d.ports.items():
-        if d.recordsets.get(ip):
-            LOG.debug('already added')
-            continue
         try:
-            LOG.info('adding {}'.format(ip))
-            d.record_create(ip, **dnsinfo)
-        except OpenStackCloudException as e:
-            LOG.warn(repr(e))
+            if d.recordsets.get(ip):
+                LOG.debug('already added')
+                continue
+            try:
+                LOG.info('adding {}'.format(ip))
+                d.record_create(ip, **dnsinfo)
+            except OpenStackCloudException as e:
+                LOG.warn(repr(e))
+                pass
+        except Exception as ex:
+            LOG.warn(repr(ex))
             pass
 
-    for ip, dnsinfo in d.recordsets.items():
-        if d.ports.get(ip):
-            LOG.debug('exists {}'.format(ip))
-            continue
+    for i, dnsinfo in d.recordsets.items():
         try:
-            LOG.info('deleting {}'.format(ip))
-            d.record_delete(ip, **dnsinfo)
-        except OpenStackCloudException as e:
-            LOG.warn(repr(e))
+            port = d.ports.get(dnsinfo['ip'])
+            if port:
+                if port['name'] == dnsinfo['name']:
+                    LOG.debug('exists {}'.format(dnsinfo['ip']))
+                    continue
+                else:
+                    try:
+                        LOG.info('deleting {}'.format(dnsinfo['ip']))
+                        d.record_delete(**dnsinfo)
+                    except OpenStackCloudException as e:
+                        LOG.warn(repr(e))
+                        pass
+        except Exception as ex:
+            LOG.warn(repr(ex))
             pass
+
 
 if __name__ == '__main__':
     main()
+
