@@ -172,6 +172,13 @@ def main():
                     except OpenStackCloudException as e:
                         LOG.warn(repr(e))
                         pass
+            else:
+                try:
+                    LOG.info('deleting {}'.format(dnsinfo['ip']))
+                    d.record_delete(**dnsinfo)
+                except OpenStackCloudException as e:
+                    LOG.warn(repr(e))
+                    pass
         except Exception as ex:
             LOG.warn(repr(ex))
             pass
