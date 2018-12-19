@@ -82,7 +82,7 @@ class Designator(object):
         ret = dict()
 
         if not self.zones.get(dns_domain):
-            self.zones[dns_domain] = self.cloud.list_recordsets(dns_domain)
+            self.zones[dns_domain] = self.cloud.list_recordsets(self.cloud.get_zone(dns_domain)['id'])['recordsets']
             i = 0
         for record in self.zones[dns_domain]:
             i = i + 1
@@ -100,14 +100,16 @@ class Designator(object):
     def record_create(self, ip, name, domain):
         fqdn = convert_to_fqdn(name, domain)
         fqdn_ptr = convert_to_fqdn(split_reverse_join(ip), 'in-addr.arpa.')
+        zone_ptr_uuid = self.cloud.get_zone(fqdn_ptr.split('.', 1)[1])['id']
+        zone_uuid = self.cloud.get_zone(domain)['id']
         try:
-            self.cloud.create_recordset(fqdn_ptr.split('.', 1)[1],
+            self.cloud.create_recordset(zone_ptr_uuid,
                                         fqdn_ptr, 'PTR', [fqdn])
         except OpenStackCloudException as e:
             LOG.warn(repr(e))
             pass
         try:
-            self.cloud.create_recordset(domain, name, 'A', [ip])
+            self.cloud.create_recordset(zone_uuid, fqdn, 'A', [ip])
         except OpenStackCloudException as e:
             LOG.warn(repr(e))
             pass
@@ -115,13 +117,28 @@ class Designator(object):
     def record_delete(self, ip, name, domain):
         fqdn = convert_to_fqdn(name, domain)
         fqdn_ptr = convert_to_fqdn(split_reverse_join(ip), 'in-addr.arpa.')
+        zone_uuid = self.cloud.get_zone(domain)['id']
+        zone_ptr_uuid = self.cloud.get_zone(fqdn_ptr.split('.', 1)[1])['id']
         try:
-            self.cloud.delete_recordset(fqdn_ptr.split('.', 1)[1], fqdn_ptr)
+            # sean4574: Later versions of shade blindly try to look up a
+            # recordset by passing the name to designate however, designate
+            # expects a recordset ID only. This means we have to retrieve the
+            # entire list of records to get the ID. We have to do this for 
+            # all zones. Fun times...
+            recordsets = self.cloud.list_recordsets(zone_ptr_uuid)['recordsets']
+            for recordset in recordsets:
+               if recordset['name'] == fqdn_ptr:
+                  LOG.info("Deleting %s" % fqdn_ptr)
+                  self.cloud.delete_recordset(zone_ptr_uuid, recordset['id'])
         except OpenStackCloudException as e:
             LOG.warn(repr(e))
             pass
         try:
-            self.cloud.delete_recordset(domain, fqdn)
+            recordsets = self.cloud.list_recordsets(zone_uuid)['recordsets']
+            for recordset in recordsets:
+               if recordset['name'] == fqdn:
+                  LOG.info("Deleting %s" % fqdn)
+                  self.cloud.delete_recordset(zone_uuid, recordset['id'])
         except OpenStackCloudException as e:
             LOG.warn(repr(e))
             pass
