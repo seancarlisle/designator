@@ -1,4 +1,4 @@
 #!/bin/bash
 
-source /root/designate-venv/bin/activate
+source /root/designator-venv/bin/activate
 /root/designator/designator.py
